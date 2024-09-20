@@ -1,7 +1,7 @@
 ﻿using System;
 using MagicResort_ResortAPI.Data;
 using MagicResort_ResortAPI.Models; // Importing Resort Model
-using MagicResort_ResortAPI.Models.DTO;
+using MagicResort_ResortAPI.Models.DTO;     //Using DTO instead of model
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 
