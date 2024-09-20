@@ -1,11 +1,13 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-namespace MagicResort_ResortAPI.Models
+namespace WanderHub_ResortAPI.Models
 {
 	public class Resort
 	{
 		[Key]       // Built-in data annotations for Primary key
+		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]		// Database automatically handling the ID
         public int ResortId { get; set; }
 
 		public string ResortName { get; set; }

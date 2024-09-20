@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace MagicResort_ResortAPI.Models.DTO
+namespace WanderHub_ResortAPI.Models.DTO
 {
 	public class ResortDTO
 	{

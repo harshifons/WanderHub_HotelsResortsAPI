@@ -1,11 +1,12 @@
 ﻿using System;
-using MagicResort_ResortAPI.Data;
-using MagicResort_ResortAPI.Models; // Importing Resort Model
-using MagicResort_ResortAPI.Models.DTO;     //Using DTO instead of model
+using WanderHub_ResortAPI.Data;
+using WanderHub_ResortAPI.Models; // Importing Resort Model
+using WanderHub_ResortAPI.Models.DTO;     //Using DTO instead of model
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
-namespace MagicResort_ResortAPI.Controllers
+namespace WanderHub_ResortAPI.Controllers
 {
     [Route("api/ResortAPI")]        // Defining route to the Controller, so the Swagger UI can access this API controller
     // [Route("api/[controller]")]     - same, but if the class name changes, route (url) also gets changed.
@@ -14,26 +15,32 @@ namespace MagicResort_ResortAPI.Controllers
                         // Including this also ensures, Model's data annotation rules (specified in the DTO) are followed.               
     public class ResortAPIController : ControllerBase   // If we use Controller class, it supports View as well. But since this is only API, no need the View.
     {
-        // Implementation of Logger using dependancy injection
-        private readonly ILogger<ResortAPIController> _logger;
+        private readonly ApplicationDBContext _dbContext;
+        //private readonly ILogger<ResortAPIController> _logger;
 
-        // Constructor
-        public ResortAPIController(ILogger<ResortAPIController> logger)     // using the built-in implementation of the logger.
+        // Extracting DB Context from build container using dependancy injection. 
+        public ResortAPIController(ApplicationDBContext dbContext)
         {
-            // install Serilog.AspNetCore,Serilog.Sinks.File, Serilog.Sinks.Console NuGet patches to log messages into a file.
-            _logger = logger;
-
+            _dbContext = dbContext;
         }
 
-        // Creating a GET endpoint, which returns a list of resorts (but using Resort DTO/wrapper instead of Resort Model)
-        [HttpGet(Name = "GetResortsList")]   //When we create an endpoint to API Controller, need to define the HTTP action. Because we are retrieing data here, it's HTTP GET
+        //Implementation of Logger using dependancy injection
+        //public ResortAPIController(ILogger<ResortAPIController> logger)     // using the built-in implementation of the logger.
+        //{
+        //// install Serilog.AspNetCore,Serilog.Sinks.File, Serilog.Sinks.Console NuGet patches to log messages into a file.
+        //    _logger = logger;
+
+        //}
+
+    // Creating a GET endpoint, which returns a list of resorts (but using Resort DTO/wrapper instead of Resort Model)
+    [HttpGet(Name = "GetResortsList")]   //When we create an endpoint to API Controller, need to define the HTTP action. Because we are retrieing data here, it's HTTP GET
 
         [ProducesResponseType(StatusCodes.Status200OK)]             // If these are not specified, the response code returns as undocumented.
 
         public ActionResult<IEnumerable<ResortDTO>> GetResorts()          // Returning Action Result code also.
         {
-            _logger.LogInformation("Getting all resorts.");
-            return Ok(ResortStore.ResortList);      // Returning the list and status code 200 (for Ok)
+            //_logger.LogInformation("Getting all resorts.");
+            return Ok(_dbContext.Resort);      // Returning the list and status code 200 (for Ok)
         }
 
 
@@ -50,11 +57,11 @@ namespace MagicResort_ResortAPI.Controllers
         {
             if (Id == 0)
             {
-                _logger.LogError("Error in retrieving ID " + Id + ". Resort does not exist!");
+                //_logger.LogError("Error in retrieving ID " + Id + ". Resort does not exist!");
                 return BadRequest();       // status 400
             }
 
-            var resort = ResortStore.ResortList.FirstOrDefault(u => u.ResortId == Id);
+            var resort = _dbContext.Resort.FirstOrDefault(u => u.ResortId == Id);
             if (resort == null)
             {
                 return NotFound();         // status 404
@@ -81,7 +88,7 @@ namespace MagicResort_ResortAPI.Controllers
             //}
 
             // Validating for unique villa name
-            if (ResortStore.ResortList.FirstOrDefault(u => u.ResortName.ToLower() == resortDTO.ResortName.ToLower()) != null)   // If the condition is not met, FirstOrDefault() returns null for reference types, 0 for numeric types   
+            if (_dbContext.Resort.FirstOrDefault(u => u.ResortName.ToLower() == resortDTO.ResortName.ToLower()) != null)   // If the condition is not met, FirstOrDefault() returns null for reference types, 0 for numeric types   
             {
                 // Adding Custom Validation to the Model State
                 ModelState.AddModelError("ResortNameError", "Resort name already exists!");    //(uniquekeyname,validation message)     // uniquekeyname can be kept empty >> ""
@@ -98,16 +105,19 @@ namespace MagicResort_ResortAPI.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
 
-            // Creating a new resort ID for the new record
-            //resortDTO.ResortId = ResortStore.ResortList.OrderByDescending(u => u.ResortId).FirstOrDefault().ResortId + 1;   
-
-            resortDTO.ResortId = (ResortStore.ResortList.OrderByDescending(u => u.ResortId).FirstOrDefault()?.ResortId ?? 0) + 1;
-            // ?.ResortId ?? 0  <<  validation if the list is empty
-            // null conditional operator (?.) provides the nextId as null + 1, which will be 1
-            // null-coalescing operator (??) provides a default value of 0 if the ResortId is null. This ensures nextId will be 0+1, which will be 1
-
-
-            ResortStore.ResortList.Add(resortDTO);
+            Resort model = new()
+            {
+                ResortId = resortDTO.ResortId,
+                ResortName = resortDTO.ResortName,
+                ImageUrl = resortDTO.ImageUrl,
+                Amenity = resortDTO.Amenity,
+                Details = resortDTO.Details,
+                Occupancy = resortDTO.Occupancy,
+                Rate = resortDTO.Rate,
+                Sqft = resortDTO.Sqft,
+            };
+            _dbContext.Resort.Add(model);       // track the changes
+            _dbContext.SaveChanges();           // push the changes to the database
 
             //return Ok(resortDTO);                                                           // Instead of returning the created resort,
             return CreatedAtRoute("GetResort", new { Id = resortDTO.ResortId }, resortDTO);    // we are giving the url/path to the created resort, so the user can access it later also.
@@ -129,13 +139,14 @@ namespace MagicResort_ResortAPI.Controllers
                 return BadRequest();
             }
 
-            var resort = ResortStore.ResortList.FirstOrDefault(u => u.ResortId == Id);
+            var resort = _dbContext.Resort.FirstOrDefault(u => u.ResortId == Id);
             if (resort == null)
             {
                 return NotFound();
             }
 
-            ResortStore.ResortList.Remove(resort);
+            _dbContext.Resort.Remove(resort);
+            _dbContext.SaveChanges();   //saving the changes
 
             return NoContent();     // using return Ok() is fine. But standard way is returning nothing, after deleting a record.
         }
@@ -150,22 +161,26 @@ namespace MagicResort_ResortAPI.Controllers
 
         public ActionResult<ResortDTO> UpdateResort(int Id, [FromBody]ResortDTO resortDTO)          // can use IActionResult, if returning NoContent()
         {
-            if (Id != resortDTO.ResortId)
+            if (Id != resortDTO.ResortId || resortDTO == null)
             {
                 return BadRequest();
             }
 
-            var resort = ResortStore.ResortList.FirstOrDefault(u => u.ResortId == Id);
-            if (resort == null)
+            Resort model = new()
             {
-                return NotFound();
-            }
+                ResortId = resortDTO.ResortId,
+                ResortName = resortDTO.ResortName,
+                ImageUrl = resortDTO.ImageUrl,
+                Amenity = resortDTO.Amenity,
+                Details = resortDTO.Details,
+                Occupancy = resortDTO.Occupancy,
+                Rate = resortDTO.Rate,
+                Sqft = resortDTO.Sqft,
+            };
+            _dbContext.Resort.Update(model);
+            _dbContext.SaveChanges();
 
-            resort.ResortName = resortDTO.ResortName;
-            resort.Occupancy = resortDTO.Occupancy;
-            resort.Sqft = resortDTO.Sqft;
-
-            return Ok(resort);
+            return Ok(model);
         }
 
 
@@ -184,7 +199,7 @@ namespace MagicResort_ResortAPI.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status200OK)]
 
-        public ActionResult<ResortDTO> UpdatePartialResort(int Id, JsonPatchDocument<ResortDTO> patchDTO)
+        public ActionResult<ResortDTO> UpdatePartialResort(int Id, JsonPatchDocument<ResortDTO> patchDTO)       // patch document doesn't have the complete object, only the fields need to be updated.
         {
             //patchDTO >>
             // path : "/ResortName"         op: "replace"      value: "Sunset View"
@@ -193,20 +208,52 @@ namespace MagicResort_ResortAPI.Controllers
                 return BadRequest();
             }
 
-            var resort = ResortStore.ResortList.FirstOrDefault(u => u.ResortId == Id);
+            var resort = _dbContext.Resort.AsNoTracking().FirstOrDefault(u => u.ResortId == Id);
+
+            ResortDTO resortDTO = new()
+            {
+                ResortId = resort.ResortId,
+                ResortName = resort.ResortName,
+                ImageUrl = resort.ImageUrl,
+                Amenity = resort.Amenity,
+                Details = resort.Details,
+                Occupancy = resort.Occupancy,
+                Rate = resort.Rate,
+                Sqft = resort.Sqft,
+            };
+
+
+
             if (resort == null)
             {
                 return NotFound();
             }
 
-            patchDTO.ApplyTo(resort, ModelState);   // Apply any updates in patchDTO To resort. If any errors, store in ModelState
+            patchDTO.ApplyTo(resortDTO, ModelState);   // Apply any updates in patchDTO To resort. If any errors, store in ModelState
+
+            Resort model = new()
+            {
+                ResortId = resortDTO.ResortId,
+                ResortName = resortDTO.ResortName,
+                ImageUrl = resortDTO.ImageUrl,
+                Amenity = resortDTO.Amenity,
+                Details = resortDTO.Details,
+                Occupancy = resortDTO.Occupancy,
+                Rate = resortDTO.Rate,
+                Sqft = resortDTO.Sqft,
+            };
+            _dbContext.Resort.Update(model);    // updating the complete record
+            _dbContext.SaveChanges();
+
+
+
 
             if (!ModelState.IsValid)        // Checking for DTO validations
             {
                 return BadRequest(ModelState);
             }
 
-            return Ok(resort);
+            return Ok(model);
         }
 
     }

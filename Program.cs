@@ -1,17 +1,33 @@
-﻿using Serilog;
+﻿using Microsoft.EntityFrameworkCore;
+using Serilog;
+using WanderHub_ResortAPI.Data;
 
-var builder = WebApplication.CreateBuilder(args);   // logger registered inside the create builder.  Can use the logger inside the API Controller, using dependancy injection.
+var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Adding services to the container (builder)
+
+
+// Adding Database service - passing the connection string from appsettings.json to ApplicationDBContext
+var connectionString = builder.Configuration.GetConnectionString("DefaultSQLConnection") ?? throw new InvalidOperationException("Connection String Default SQLConnection Not Found.");
+//getting connection string from appsettings.json using GetConnectionString helper method
+
+builder.Services.AddDbContext<ApplicationDBContext>(options =>
+{
+    options.UseSqlServer(connectionString);
+});
 
 // Configuring logger using the Sirilog Logger
-Log.Logger = new LoggerConfiguration().MinimumLevel.Error().WriteTo.File("log/resortlogs.txt", rollingInterval:RollingInterval.Month).CreateLogger();
-            // all messages above the debug level will be logged, in the specified place
+
+// logger registered inside the create builder.  Can use the logger inside the API Controller, using dependancy injection.
+Log.Logger = new LoggerConfiguration().MinimumLevel.Error().WriteTo.File("log/resortlog.txt", rollingInterval:RollingInterval.Month).CreateLogger();
+            // all messages above the <minimum level> level will be logged, in the specified place (e.g. debug, information, warning, error)
             // rolling interval >> when a new file should be created
 
 builder.Host.UseSerilog();      // Notifying the application to use Sirilog instead of builder
 
 
+
+// Handling input and output in the API.
 
 //builder.Services.AddControllers().AddNewtonsoftJson();
 //OR
@@ -20,7 +36,7 @@ builder.Host.UseSerilog();      // Notifying the application to use Sirilog inst
 //}).AddNewtonsoftJson();
 // OR
 builder.Services.AddControllers(option => {
-    option.ReturnHttpNotAcceptable = true;          // If a document format (e.g. html, xml, json) is not acceptable, it will return error.
+    //option.ReturnHttpNotAcceptable = true;          // If a document format (e.g. html, xml, json) is not acceptable, it will return error.
 }).AddNewtonsoftJson().AddXmlDataContractSerializerFormatters();    //Adding built-in support for xml in the API. Not the Resort data will be displayed in xml format, instead of json format.
 
 
@@ -29,6 +45,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
